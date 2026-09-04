@@ -1,0 +1,16 @@
+{
+  "name": "@video-agent-studio/db",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "test": "vitest run src --pool=forks --fileParallelism=false",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@video-agent-studio/shared": "*",
+    "@video-agent-studio/workflow-engine": "*"
+  }
+}

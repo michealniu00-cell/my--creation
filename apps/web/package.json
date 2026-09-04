@@ -1,0 +1,31 @@
+{
+  "name": "@video-agent-studio/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "test": "vitest run --pool=forks --fileParallelism=false",
+    "typecheck": "next typegen && tsc --project tsconfig.typecheck.json --noEmit"
+  },
+  "dependencies": {
+    "@video-agent-studio/agents": "*",
+    "@video-agent-studio/artifact-service": "*",
+    "@video-agent-studio/db": "*",
+    "@video-agent-studio/providers": "*",
+    "@video-agent-studio/review-service": "*",
+    "@video-agent-studio/shared": "*",
+    "@video-agent-studio/worker": "*",
+    "@video-agent-studio/workflow-engine": "*",
+    "next": "^15.5.25",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.1",
+    "eslint-config-next": "^15.5.25"
+  }
+}
