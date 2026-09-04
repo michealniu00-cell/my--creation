@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "apps/web/*"
+      ],
+      "@video-agent-studio/shared": [
+        "packages/shared/src/index.ts"
+      ],
+      "@video-agent-studio/db": [
+        "packages/db/src/index.ts"
+      ],
+      "@video-agent-studio/workflow-engine": [
+        "packages/workflow-engine/src/index.ts"
+      ],
+      "@video-agent-studio/agents": [
+        "packages/agents/src/index.ts"
+      ],
+      "@video-agent-studio/review-service": [
+        "packages/review-service/src/index.ts"
+      ],
+      "@video-agent-studio/artifact-service": [
+        "packages/artifact-service/src/index.ts"
+      ],
+      "@video-agent-studio/providers": [
+        "packages/providers/src/index.ts"
+      ]
+    }
+  }
+}
