@@ -35,7 +35,7 @@ describe('POST /api/storyboards/groups/[artifactGroupId]/activate-version', () =
     return { project, shot, group: storyboard!.group! };
   }
 
-  async function createCandidate(groupId: string, note: string) {
+  async function createCandidate(groupId: string, note: string, status: 'generated' | 'pending' | 'failed' | 'rejected' = 'generated') {
     const version = await artifactRepository.createNextVersion({
       groupId,
       generatedByAgent: 'agent8',
@@ -50,7 +50,7 @@ describe('POST /api/storyboards/groups/[artifactGroupId]/activate-version', () =
       durationMs: null,
       generationInput: {},
       metadata: {},
-      status: 'generated',
+      status,
       versionNote: note,
       isPlaceholder: false,
     });
@@ -68,6 +68,15 @@ describe('POST /api/storyboards/groups/[artifactGroupId]/activate-version', () =
 
     expect(response.status).toBe(400);
     expect((await response.json()).error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it.each(['pending', 'failed', 'rejected'] as const)('rejects %s versions even when directly requested', async (status) => {
+    const { group } = await getStoryboardGroup();
+    const candidate = await createCandidate(group.id, 'not-ready', status);
+    const response = await POST(request({ versionId: candidate.id, expectedActiveVersionId: group.activeVersionId ?? null }), { params: Promise.resolve({ artifactGroupId: group.id }) });
+    expect(response.status).toBe(409);
+    expect((await response.json()).error.code).toBe('VERSION_NOT_READY');
+    expect((await artifactRepository.getGroup(group.id))?.activeVersionId).toBe(group.activeVersionId);
   });
 
   it('returns 409 for a stale activation and leaves the newer version active', async () => {

@@ -38,6 +38,9 @@ export async function POST(
         404,
       );
     }
+    if (result.reason === 'version_not_ready') {
+      return jsonFail('VERSION_NOT_READY', '此版本尚未生成成功或未通过审核，当前生效版本保持不变。', 409);
+    }
     const lockConflict = result.reason.endsWith('_locked');
     return jsonFail(
       lockConflict ? 'LOCK_CONFLICT' : 'ARTIFACT_VERSION_CONFLICT',

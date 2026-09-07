@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto';
+import type { RemoteVideoTaskControl } from '@video-agent-studio/providers';
+
 /** Durable execution controls shared by full-workflow entry points. */
 export interface WorkflowExecutionControl {
   /** Stable durable job identity used to bind retries to one workflow run. */
@@ -12,6 +15,14 @@ export interface WorkflowExecutionControl {
   signal?: AbortSignal;
   /** Persists the stable run identity before expensive workflow side effects. */
   onRunReady?: (runId: string) => Promise<void> | void;
+  remoteVideoTaskControl?: (scope: string) => RemoteVideoTaskControl;
+}
+
+export function remoteVideoTaskScope(
+  shotId: string,
+  request: Record<string, unknown>,
+) {
+  return `${shotId}:${createHash('sha256').update(JSON.stringify(request)).digest('hex')}`;
 }
 
 export function scopedIdempotencyKey(

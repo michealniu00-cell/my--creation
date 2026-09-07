@@ -26,6 +26,8 @@ import {
   type ArtifactVersionRecord,
 } from '@video-agent-studio/shared';
 import { DurableJobError, type DurableJobContext } from './job-runner';
+import { remoteVideoTaskControl } from './remote-video-task';
+import { remoteVideoTaskScope } from '../workflows/execution-control';
 
 type ReferenceAsset = {
   storagePath: string;
@@ -505,6 +507,17 @@ export async function runShotVideoRegenerationJob(context: DurableJobContext) {
       );
       context.throwIfAborted();
       const generated = await createVideoProvider(binding).generate({
+        ...remoteVideoTaskControl(
+          context,
+          remoteVideoTaskScope(parsed.data.shotId, {
+            provider: binding?.provider,
+            model: binding?.modelName,
+            baseUrl: binding?.baseUrl,
+            prompt,
+            durationMs: 4000,
+            reference: parsed.data.referenceAsset?.storagePath ?? null,
+          }),
+        ),
         prompt,
         durationMs: 4000,
         referenceAsset,
@@ -531,6 +544,7 @@ export async function runShotVideoRegenerationJob(context: DurableJobContext) {
         metadata: {
           ...baseMetadata,
           queueStatus: 'generated',
+          remoteTaskId: generated.remoteId ?? null,
           ...(generated.metadata ?? {}),
         },
         status: 'generated',

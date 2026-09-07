@@ -5,10 +5,13 @@ import { getProjectContext, getStoryboardPageData } from '@/lib/server-data';
 
 export default async function StoryboardWorkbenchPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ projectId: string }>;
+  searchParams: Promise<{ shot?: string }>;
 }) {
   const { projectId } = await params;
+  const { shot: initialShotId } = await searchParams;
   const context = await getProjectContext(projectId);
   const data = await getStoryboardPageData(projectId);
   if (!context) {
@@ -72,6 +75,8 @@ export default async function StoryboardWorkbenchPage({
       </details>
 
       <ShotWorkbench
+        key={initialShotId ?? 'default'}
+        initialShotId={initialShotId}
         projectId={projectId}
         shots={data.shots as ShotWithAssets[]}
       />

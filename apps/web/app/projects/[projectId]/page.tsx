@@ -174,7 +174,9 @@ export default async function ProjectOverviewPage({
             return (
               <details key={key} className="snapshot-disclosure">
                 <summary>
-                  <span>{snapshotLabels[key] ?? key}</span>
+                  <span>{key === 'script' && !context.manualGates.scriptConfirmed
+                    ? '当前脚本（待人工确认）'
+                    : snapshotLabels[key] ?? key}</span>
                   <small>查看内容</small>
                 </summary>
                 <pre>{content}</pre>

@@ -1,10 +1,107 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MiniMaxChatProvider, MiniMaxImageProvider } from './minimax-provider';
+import {
+  MiniMaxChatProvider,
+  MiniMaxImageProvider,
+  MiniMaxVideoProvider,
+} from './minimax-provider';
 
 describe('MiniMax provider transient retry', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+  });
+
+  function videoProvider() {
+    return new MiniMaxVideoProvider({
+      provider: 'minimax',
+      providerLabel: 'MiniMax',
+      modelName: 'video-01',
+      temperature: null,
+      maxTokens: null,
+      timeoutSec: 30,
+      retryLimit: 0,
+      extraConfig: {},
+      baseUrl: 'https://api.minimaxi.com/v1',
+      apiKey: 'test-key',
+      hasApiKey: true,
+      credentialSource: 'env',
+    });
+  }
+
+  it('persists the remote task before polling and resumes without submitting again', async () => {
+    let savedId: string | undefined;
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ task_id: 'remote-1' })),
+      )
+      .mockImplementationOnce(async () => {
+        expect(savedId).toBe('remote-1');
+        throw new Error('simulated connection interruption');
+      });
+    await expect(
+      videoProvider().generate({
+        prompt: 'test video',
+        onRemoteTaskSubmitted: async (id) => {
+          savedId = id;
+        },
+      }),
+    ).rejects.toThrow('simulated connection interruption');
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          status: 'Success',
+          download_url: 'https://cdn.example.test/video.mp4',
+        }),
+      ),
+    );
+    const result = await videoProvider().generate({
+      prompt: 'test video',
+      resumeRemoteTaskId: savedId,
+    });
+    expect(result.remoteId).toBe('remote-1');
+    expect(
+      fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST'),
+    ).toHaveLength(1);
+    expect(String(fetchMock.mock.calls.at(-1)?.[0])).toContain(
+      'task_id=remote-1',
+    );
+  });
+
+  it('does not poll before a remote-task checkpoint has been acknowledged', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify({ task_id: 'remote-2' })));
+    await expect(
+      videoProvider().generate({
+        prompt: 'test',
+        onRemoteTaskSubmitted: async () => {
+          throw new Error('checkpoint unavailable');
+        },
+      }),
+    ).rejects.toThrow('checkpoint unavailable');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('records terminal remote failure so a later retry can create a new task', async () => {
+    const onFailed = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: 'Failed',
+          message: 'supplier rejected task',
+        }),
+      ),
+    );
+    await expect(
+      videoProvider().generate({
+        prompt: 'test',
+        resumeRemoteTaskId: 'remote-failed',
+        onRemoteTaskFailed: onFailed,
+      }),
+    ).rejects.toThrow('supplier rejected task');
+    expect(onFailed).toHaveBeenCalledWith('remote-failed');
   });
 
   it('retries overloaded text requests before succeeding', async () => {
@@ -174,7 +271,9 @@ describe('MiniMax provider transient retry', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/image_generation');
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/image_generation');
-    expect(String(fetchMock.mock.calls[2]?.[0])).toContain('https://cdn.example.com/generated.png');
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
+      'https://cdn.example.com/generated.png',
+    );
     expect(result.base64Data).toBeTruthy();
     expect(result.metadata?.requestedAspectRatio).toBe('16:9');
   });

@@ -3,6 +3,7 @@ import type {
   ArtifactVersionRecord,
   ShotAssetBindingRecord,
 } from '@video-agent-studio/shared';
+import { isActivatableArtifactStatus } from '@video-agent-studio/shared';
 import { audited, id, mutateDb, readDb, timestamp } from '../dev-file-db';
 import type { DatabaseState } from '../types';
 import { appendTaskEvent } from './event.repository';
@@ -30,6 +31,7 @@ export type ArtifactActivationFailureReason =
   | 'invalid_expectation'
   | 'group_not_found'
   | 'version_not_found'
+  | 'version_not_ready'
   | 'active_version_conflict'
   | 'group_revision_conflict'
   | 'shot_locked'
@@ -130,6 +132,10 @@ function activateVersionInDb(
       version,
       previousActiveVersionId,
     };
+  }
+
+  if (!isActivatableArtifactStatus(version.status)) {
+    return failedActivation('version_not_ready', group, version);
   }
 
   if (expectation) {

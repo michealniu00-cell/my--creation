@@ -8,6 +8,5 @@ coverage
 .env
 .env.local
 .data
-artifacts
-deliverables
-
+/artifacts/
+/deliverables/

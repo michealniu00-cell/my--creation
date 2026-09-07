@@ -1,4 +1,5 @@
 import { runRepository } from '@video-agent-studio/db';
+import { remoteVideoTaskControl } from './remote-video-task';
 import {
   scriptWorkflowRunSchema,
   storyboardWorkflowRunSchema,
@@ -280,6 +281,8 @@ export function createWorkflowJobHandlers(
           resumeExistingRun: context.job.resumeCount > 0,
           resumeCount: context.job.resumeCount,
           onRunReady: (runId) => persistRunBinding(context, runId),
+          remoteVideoTaskControl: (scope) =>
+            remoteVideoTaskControl(context, scope),
         },
       );
       context.throwIfAborted();

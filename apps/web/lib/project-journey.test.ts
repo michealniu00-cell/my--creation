@@ -39,6 +39,42 @@ function run(
 }
 
 describe('deriveProjectJourney', () => {
+  it('offers the first script run after setup instead of reporting a failure', () => {
+    const journey = deriveProjectJourney({
+      project: project('script'),
+      configConfirmed: true,
+      scriptConfirmed: false,
+      runs: {},
+    });
+    expect(journey.stages.script.status).toBe('not_started');
+    expect(journey.recommendedAction).toBe('start_script');
+  });
+
+  it.each(['pending', 'running', 'reviewing', 'paused'] as const)(
+    'keeps an unconfirmed %s script on the progress path',
+    (status) => {
+      const journey = deriveProjectJourney({
+        project: project('script'),
+        configConfirmed: true,
+        scriptConfirmed: false,
+        runs: { script: run('script', status, 'agent4') },
+      });
+      expect(journey.recommendedAction).toBe('monitor_script');
+      expect(journey.stages.production.status).toBe('not_started');
+    },
+  );
+
+  it('never presents an ended run as a manually confirmed script', () => {
+    const journey = deriveProjectJourney({
+      project: project('script'),
+      configConfirmed: true,
+      scriptConfirmed: false,
+      runs: { script: run('script', 'completed', 'script_user_confirm') },
+    });
+    expect(journey.stages.script.status).toBe('needs_attention');
+    expect(journey.recommendedAction).toBe('resolve_script');
+  });
+
   it('uses persisted gate evidence instead of stale run metadata after the project advanced', () => {
     const journey = deriveProjectJourney({
       project: project('storyboard'),

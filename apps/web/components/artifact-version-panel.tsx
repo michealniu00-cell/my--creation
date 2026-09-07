@@ -1,6 +1,10 @@
 'use client';
 
 import Image from 'next/image';
+import Link from 'next/link';
+// Keep server validators out of this client component's bundle.
+import { isActivatableArtifactStatus } from '@video-agent-studio/shared/src/enums/status';
+import { StatusPill } from './status-pill';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type {
@@ -90,6 +94,7 @@ export function ArtifactVersionPanel({
   emptyHint = '暂无可展示的版本记录。',
   compact = false,
   processingVersion,
+  recoveryHref,
 }: {
   title: string;
   projectId?: string;
@@ -106,6 +111,7 @@ export function ArtifactVersionPanel({
   emptyHint?: string;
   compact?: boolean;
   processingVersion?: ProcessingVersionSummary | null;
+  recoveryHref?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -311,6 +317,15 @@ export function ArtifactVersionPanel({
               <div>{processingVersion.error}</div>
             </details>
           ) : null}
+          {processingVersion.status === 'failed' &&
+          recoveryHref &&
+          processingVersion.error?.includes(
+            'prompt length must be less than',
+          ) ? (
+            <Link className="shot-edit-link" href={recoveryHref}>
+              修改此镜头提示内容
+            </Link>
+          ) : null}
           {processingVersion.jobUnavailable ? (
             <p className="control-action-error">
               旧任务无法恢复；使用当前 Shot 的重生成操作即可安全追加新版本。
@@ -347,7 +362,8 @@ export function ArtifactVersionPanel({
             {versions.map((version) => {
               const isActive =
                 version.isActive || version.versionId === activeVersionId;
-              const canActivate = showActivate && !isActive;
+              const ready = isActivatableArtifactStatus(version.status);
+              const canActivate = showActivate && !isActive && ready;
 
               return (
                 <div
@@ -369,11 +385,10 @@ export function ArtifactVersionPanel({
                           : ''}
                       </div>
                     </div>
-                    <span className={`pill ${version.status}`}>
-                      {version.status}
-                    </span>
+                    <StatusPill value={processingVersion?.versionId === version.versionId && processingVersion.jobUnavailable ? 'failed' : version.status} />
                   </div>
                   <div className="version-row-actions">
+                    {!ready && !isActive ? <span className="subtle">此版本尚不可用，不能切换为当前版本。</span> : null}
                     {isActive ? (
                       <span className="pill active">当前生效</span>
                     ) : null}

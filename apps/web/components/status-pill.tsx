@@ -15,6 +15,8 @@ export function StatusPill({
     reviewing: '待确认',
     completed: '已完成',
     approved: '已通过',
+    generated: '已生成',
+    rejected: '未通过',
     pass: '审核通过',
     revise: '需要修改',
     active: '已生效',

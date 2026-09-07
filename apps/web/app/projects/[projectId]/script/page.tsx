@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import Link from 'next/link';
 import { RunStreamStatus } from '@/components/run-stream-status';
 import { ScriptControls } from '@/components/script-controls';
 import { StatusPill } from '@/components/status-pill';
@@ -8,6 +9,8 @@ import {
   getScriptWorkflowPageData,
 } from '@/lib/server-data';
 import { formatDate } from '@/lib/format';
+import { readScriptSections } from '@/lib/script-sections';
+import { deriveProjectJourney } from '@/lib/project-journey';
 
 function runtimeTone(state: string) {
   switch (state) {
@@ -75,6 +78,26 @@ export default async function ScriptWorkflowPage({
     (task) => task.id !== finalScriptTask?.id,
   );
   const isScriptConfirmed = workflow.scriptGate.confirmed;
+  const sections = readScriptSections(finalScriptTask?.outputJson ?? {});
+  const journey = deriveProjectJourney({
+    project: context.project,
+    configConfirmed: Boolean(context.config?.confirmedByUser),
+    scriptConfirmed: isScriptConfirmed,
+    scriptEvidenceInconsistent: context.manualGates.scriptEvidenceInconsistent,
+    stats: context.overview?.stats,
+    runs: context.runs,
+  });
+  const scriptControls = (
+    <ScriptControls
+      projectId={projectId}
+      canConfirmScript={Boolean(finalScriptTask) && !isScriptConfirmed}
+      isScriptConfirmed={isScriptConfirmed}
+      activeTaskId={finalScriptTask?.id}
+      hasHistoricalRun={Boolean(workflow.run)}
+      canRunWorkflow={workflow.canRunWorkflow}
+      runDisabledReason={workflow.runDisabledReason}
+    />
+  );
 
   return (
     <>
@@ -84,25 +107,27 @@ export default async function ScriptWorkflowPage({
             <p className="hero-eyebrow">步骤 02 · 人工确认门</p>
             <h1 className="page-title">脚本与审核</h1>
             <p>
-              先读最终脚本，需要时再展开调研、故事线和运行详情。确认后才会进入
-              Shot 制作。
+              {isScriptConfirmed
+                ? '当前脚本已确认，可继续制作分镜与视频。重新生成会创建新版本，并再次等待你的确认。'
+                : finalScriptTask
+                ? '下一步：核对完整口播、事实数据与画面，再由你确认。内容审核通过不等于人工确认。'
+                : '先读最终脚本，需要时再展开调研、故事线和运行详情。确认后才会进入 Shot 制作。'}
             </p>
           </div>
-          {workflow.run ? (
-            <StatusPill value={workflow.run.status} />
-          ) : (
-            <span className="pill">未开始</span>
-          )}
+          <StatusPill value={journey.stages.script.pillValue} />
         </div>
-        <ScriptControls
-          projectId={projectId}
-          canConfirmScript={Boolean(finalScriptTask) && !isScriptConfirmed}
-          isScriptConfirmed={isScriptConfirmed}
-          activeTaskId={finalScriptTask?.id}
-          hasHistoricalRun={Boolean(workflow.run)}
-          canRunWorkflow={workflow.canRunWorkflow}
-          runDisabledReason={workflow.runDisabledReason}
-        />
+        {finalScriptTask ? (
+          <div className="actions">
+            <a className="button" href="#script-document">
+              阅读完整脚本
+            </a>
+            <a className="button secondary" href="#script-confirmation">
+              前往确认与下一步
+            </a>
+          </div>
+        ) : (
+          scriptControls
+        )}
       </section>
 
       {workflow.workflowJob ? (
@@ -114,10 +139,10 @@ export default async function ScriptWorkflowPage({
       ) : null}
 
       <section className="script-review-layout">
-        <article className="card script-document">
+        <article className="card script-document" id="script-document">
           <div className="section-heading">
             <div>
-              <p className="hero-eyebrow">Current script</p>
+              <p className="hero-eyebrow">脚本正文</p>
               <h2 className="card-title">
                 {isScriptConfirmed ? '当前生效脚本' : '当前待确认脚本'}
               </h2>
@@ -138,9 +163,80 @@ export default async function ScriptWorkflowPage({
                   {finalScriptTask.modelName ?? 'unknown'}
                 </span>
               </div>
-              <pre className="script-copy">
-                {finalScriptTask.outputMarkdown}
-              </pre>
+              {sections.length > 0 ? (
+                <div className="script-sections">
+                  <nav className="script-outline" aria-label="脚本段落">
+                    {sections.map((section, index) => (
+                      <a key={index} href={`#script-section-${index + 1}`}>
+                        {index + 1}. {section.sectionTitle}
+                      </a>
+                    ))}
+                  </nav>
+                  {sections.map((section, index) => (
+                    <section
+                      key={index}
+                      id={`script-section-${index + 1}`}
+                      className="script-section"
+                    >
+                      <span className="hero-eyebrow">
+                        段落 {String(index + 1).padStart(2, '0')}
+                      </span>
+                      <h3>{section.sectionTitle}</h3>
+                      <div className="script-narration">
+                        <strong>口播</strong>
+                        <p>
+                          {section.narration ||
+                            '此段未提供口播，请检查原始输出。'}
+                        </p>
+                      </div>
+                      <div className="script-visuals">
+                        <strong>画面</strong>
+                        <p>{section.visuals || '此段未提供画面说明。'}</p>
+                      </div>
+                      {section.keyBeat ? (
+                        <p className="subtle">
+                          <strong>节奏重点：</strong>
+                          {section.keyBeat}
+                        </p>
+                      ) : null}
+                      {section.transitionToNext ? (
+                        <p className="subtle">
+                          <strong>转场：</strong>
+                          {section.transitionToNext}
+                        </p>
+                      ) : null}
+                    </section>
+                  ))}
+                  <details className="script-source">
+                    <summary>定位概要与原始输出</summary>
+                    <pre className="script-copy">
+                      {finalScriptTask.outputMarkdown}
+                    </pre>
+                    <pre className="script-copy">
+                      {JSON.stringify(finalScriptTask.outputJson, null, 2)}
+                    </pre>
+                  </details>
+                </div>
+              ) : (
+                <pre className="script-copy">
+                  {finalScriptTask.outputMarkdown ||
+                    JSON.stringify(finalScriptTask.outputJson, null, 2)}
+                </pre>
+              )}
+              <section className="script-confirmation" id="script-confirmation">
+                <h3>
+                  {isScriptConfirmed
+                    ? '脚本已确认'
+                    : '完成阅读后，确认这版脚本'}
+                </h3>
+                <p className="subtle">
+                  {isScriptConfirmed
+                    ? '可返回制作台继续处理分镜与视频。'
+                    : '请核对事实依据、口播措辞与画面要求。确认将推进工作流；重新生成则会保留历史版本。'}
+                </p>
+                {scriptControls}
+                {isScriptConfirmed ? <Link className="button" href={`/projects/${projectId}/timeline`}>继续 Shot 制作</Link> : null}
+              </section>
             </>
           ) : (
             <div className="empty-reading-state">
@@ -152,7 +248,7 @@ export default async function ScriptWorkflowPage({
 
         <aside className="card script-review-panel">
           <div>
-            <p className="hero-eyebrow">Review gate</p>
+            <p className="hero-eyebrow">人工确认</p>
             <h2 className="card-title">确认检查</h2>
           </div>
           <div className="review-check-list">
@@ -165,7 +261,7 @@ export default async function ScriptWorkflowPage({
               <strong>
                 {isScriptConfirmed
                   ? '已确认'
-                  : workflow.run?.currentNode === 'script_user_confirm'
+                  : finalScriptTask
                     ? '等待你确认'
                     : '尚未到达'}
               </strong>

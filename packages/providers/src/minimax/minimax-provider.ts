@@ -105,7 +105,9 @@ function extractText(payload: MiniMaxChatPayload) {
 }
 
 function ensureMiniMaxApiKey(binding: ProviderBindingConfig) {
-  const apiKey = sanitizeApiKey(binding.apiKey) ?? sanitizeApiKey(process.env.MINIMAX_API_KEY ?? null);
+  const apiKey =
+    sanitizeApiKey(binding.apiKey) ??
+    sanitizeApiKey(process.env.MINIMAX_API_KEY ?? null);
   if (!apiKey) {
     throw new Error(
       'API key is required for provider minimax. Please configure the backend scope API key env or set MINIMAX_API_KEY.',
@@ -115,10 +117,11 @@ function ensureMiniMaxApiKey(binding: ProviderBindingConfig) {
 }
 
 function getMiniMaxBaseUrl(binding: ProviderBindingConfig) {
-  const raw = (binding.baseUrl ?? process.env.MINIMAX_BASE_URL ?? 'https://api.minimaxi.com/v1').replace(
-    /\/+$/,
-    '',
-  );
+  const raw = (
+    binding.baseUrl ??
+    process.env.MINIMAX_BASE_URL ??
+    'https://api.minimaxi.com/v1'
+  ).replace(/\/+$/, '');
 
   try {
     const url = new URL(raw);
@@ -149,7 +152,10 @@ function getMiniMaxFallbackBaseUrls(baseUrl: string) {
   return [normalized];
 }
 
-function shouldRetryMiniMaxAgainstAlternateRegion(status: number, errorText: string) {
+function shouldRetryMiniMaxAgainstAlternateRegion(
+  status: number,
+  errorText: string,
+) {
   return false;
 }
 
@@ -162,7 +168,9 @@ function shouldRetryMiniMaxTransient(status: number, errorText: string) {
     return true;
   }
 
-  return /overloaded_error|服务集群负载较高|temporarily unavailable|try again later|timeout/i.test(errorText);
+  return /overloaded_error|服务集群负载较高|temporarily unavailable|try again later|timeout/i.test(
+    errorText,
+  );
 }
 
 function parseRetryAfterMs(value: string | null) {
@@ -183,7 +191,10 @@ function parseRetryAfterMs(value: string | null) {
   return null;
 }
 
-function getMiniMaxRetryDelayMs(attempt: number, retryAfterHeader: string | null) {
+function getMiniMaxRetryDelayMs(
+  attempt: number,
+  retryAfterHeader: string | null,
+) {
   const hintedDelay = parseRetryAfterMs(retryAfterHeader);
   if (typeof hintedDelay === 'number' && hintedDelay > 0) {
     return Math.min(30_000, hintedDelay);
@@ -216,7 +227,9 @@ function inferMiniMaxAspectRatio(width = 1024, height = 1024) {
     { label: '2:3', value: 2 / 3 },
   ];
 
-  const match = candidates.find((candidate) => Math.abs(candidate.value - ratio) <= 0.02);
+  const match = candidates.find(
+    (candidate) => Math.abs(candidate.value - ratio) <= 0.02,
+  );
   return match?.label ?? null;
 }
 
@@ -245,7 +258,10 @@ function inferMiniMaxDuration(durationMs = 6000) {
   return durationMs > 7_000 ? 10 : 6;
 }
 
-function dataUrlFromReference(reference: { mimeType: string; bytesBase64: string }) {
+function dataUrlFromReference(reference: {
+  mimeType: string;
+  bytesBase64: string;
+}) {
   return `data:${reference.mimeType};base64,${reference.bytesBase64}`;
 }
 
@@ -257,7 +273,12 @@ function extractMiniMaxImageCandidate(data: Record<string, unknown>) {
       : typeof data.imageBase64 === 'string'
         ? data.imageBase64
         : Array.isArray(data.images)
-          ? data.images.find((item) => isRecord(item) && typeof item.base64 === 'string' && item.base64)?.base64
+          ? data.images.find(
+              (item) =>
+                isRecord(item) &&
+                typeof item.base64 === 'string' &&
+                item.base64,
+            )?.base64
           : null;
 
   const urlCandidate = Array.isArray(data.image_urls)
@@ -269,11 +290,15 @@ function extractMiniMaxImageCandidate(data: Record<string, unknown>) {
         : typeof data.imageUrl === 'string'
           ? data.imageUrl
           : Array.isArray(data.images)
-            ? data.images.find((item) => isRecord(item) && typeof item.url === 'string' && item.url)?.url
+            ? data.images.find(
+                (item) =>
+                  isRecord(item) && typeof item.url === 'string' && item.url,
+              )?.url
             : null;
 
   return {
-    base64Candidate: typeof base64Candidate === 'string' ? base64Candidate : null,
+    base64Candidate:
+      typeof base64Candidate === 'string' ? base64Candidate : null,
     urlCandidate: typeof urlCandidate === 'string' ? urlCandidate : null,
   };
 }
@@ -316,7 +341,9 @@ async function fetchMiniMaxJson<T>(
           signal: providerRequestSignal(binding, init.signal),
           headers: {
             Authorization: `Bearer ${ensureMiniMaxApiKey(binding)}`,
-            ...(init.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
+            ...(init.body instanceof FormData
+              ? {}
+              : { 'Content-Type': 'application/json' }),
             ...init.headers,
           },
         });
@@ -327,24 +354,42 @@ async function fetchMiniMaxJson<T>(
         }
 
         const errorText = await response.text();
-        if (shouldRetryMiniMaxTransient(response.status, errorText) && attempt < retryLimit) {
+        if (
+          shouldRetryMiniMaxTransient(response.status, errorText) &&
+          attempt < retryLimit
+        ) {
           await abortableProviderDelay(
-            getMiniMaxRetryDelayMs(attempt, response.headers.get('retry-after')),
+            getMiniMaxRetryDelayMs(
+              attempt,
+              response.headers.get('retry-after'),
+            ),
             init.signal,
           );
           continue;
         }
 
-        lastError = new Error(`MiniMax request failed (${response.status}): ${errorText}`);
-        if (!shouldRetryMiniMaxAgainstAlternateRegion(response.status, errorText) || index === baseUrls.length - 1) {
+        lastError = new Error(
+          `MiniMax request failed (${response.status}): ${errorText}`,
+        );
+        if (
+          !shouldRetryMiniMaxAgainstAlternateRegion(
+            response.status,
+            errorText,
+          ) ||
+          index === baseUrls.length - 1
+        ) {
           throw lastError;
         }
         break;
       } catch (error) {
-        const resolvedError = error instanceof Error ? error : new Error(String(error));
+        const resolvedError =
+          error instanceof Error ? error : new Error(String(error));
         if (attempt < retryLimit) {
           lastError = resolvedError;
-          await abortableProviderDelay(getMiniMaxRetryDelayMs(attempt, null), init.signal);
+          await abortableProviderDelay(
+            getMiniMaxRetryDelayMs(attempt, null),
+            init.signal,
+          );
           continue;
         }
         throw resolvedError;
@@ -381,29 +426,49 @@ async function fetchMiniMaxBinary(
           const arrayBuffer = await response.arrayBuffer();
           return {
             bytesBase64: Buffer.from(arrayBuffer).toString('base64'),
-            mimeType: response.headers.get('content-type') ?? 'application/octet-stream',
+            mimeType:
+              response.headers.get('content-type') ??
+              'application/octet-stream',
           };
         }
 
         const errorText = await response.text();
-        if (shouldRetryMiniMaxTransient(response.status, errorText) && attempt < retryLimit) {
+        if (
+          shouldRetryMiniMaxTransient(response.status, errorText) &&
+          attempt < retryLimit
+        ) {
           await abortableProviderDelay(
-            getMiniMaxRetryDelayMs(attempt, response.headers.get('retry-after')),
+            getMiniMaxRetryDelayMs(
+              attempt,
+              response.headers.get('retry-after'),
+            ),
             signal,
           );
           continue;
         }
 
-        lastError = new Error(`MiniMax binary request failed (${response.status}): ${errorText}`);
-        if (!shouldRetryMiniMaxAgainstAlternateRegion(response.status, errorText) || index === baseUrls.length - 1) {
+        lastError = new Error(
+          `MiniMax binary request failed (${response.status}): ${errorText}`,
+        );
+        if (
+          !shouldRetryMiniMaxAgainstAlternateRegion(
+            response.status,
+            errorText,
+          ) ||
+          index === baseUrls.length - 1
+        ) {
           throw lastError;
         }
         break;
       } catch (error) {
-        const resolvedError = error instanceof Error ? error : new Error(String(error));
+        const resolvedError =
+          error instanceof Error ? error : new Error(String(error));
         if (attempt < retryLimit) {
           lastError = resolvedError;
-          await abortableProviderDelay(getMiniMaxRetryDelayMs(attempt, null), signal);
+          await abortableProviderDelay(
+            getMiniMaxRetryDelayMs(attempt, null),
+            signal,
+          );
           continue;
         }
         throw resolvedError;
@@ -418,24 +483,32 @@ export class MiniMaxChatProvider implements LlmProvider {
   constructor(private readonly binding: ProviderBindingConfig) {}
 
   async generate(input: TextGenerationInput): Promise<TextGenerationOutput> {
-    const payload = await fetchMiniMaxJson<MiniMaxChatPayload>(this.binding, '/chat/completions', {
-      method: 'POST',
-      signal: input.signal,
-      headers: providerIdempotencyHeaders(input.idempotencyKey),
-      body: JSON.stringify({
-        model: this.binding.modelName,
-        temperature: input.temperature ?? this.binding.temperature ?? undefined,
-        max_tokens: input.maxOutputTokens ?? this.binding.maxTokens ?? undefined,
-        reasoning_split: input.jsonSchema ? false : true,
-        response_format: input.jsonSchema ? { type: 'json_object' } : undefined,
-        messages: [
-          ...(buildInstructions(input)
-            ? [{ role: 'system', content: buildInstructions(input) }]
-            : []),
-          { role: 'user', content: input.prompt },
-        ],
-      }),
-    });
+    const payload = await fetchMiniMaxJson<MiniMaxChatPayload>(
+      this.binding,
+      '/chat/completions',
+      {
+        method: 'POST',
+        signal: input.signal,
+        headers: providerIdempotencyHeaders(input.idempotencyKey),
+        body: JSON.stringify({
+          model: this.binding.modelName,
+          temperature:
+            input.temperature ?? this.binding.temperature ?? undefined,
+          max_tokens:
+            input.maxOutputTokens ?? this.binding.maxTokens ?? undefined,
+          reasoning_split: input.jsonSchema ? false : true,
+          response_format: input.jsonSchema
+            ? { type: 'json_object' }
+            : undefined,
+          messages: [
+            ...(buildInstructions(input)
+              ? [{ role: 'system', content: buildInstructions(input) }]
+              : []),
+            { role: 'user', content: input.prompt },
+          ],
+        }),
+      },
+    );
 
     const text = extractText(payload);
     const json =
@@ -476,7 +549,9 @@ export class MiniMaxImageProvider implements ImageProvider {
         method: 'POST',
         signal: input.signal,
         headers: providerIdempotencyHeaders(
-          input.idempotencyKey ? `${input.idempotencyKey}:${responseFormat}` : undefined,
+          input.idempotencyKey
+            ? `${input.idempotencyKey}:${responseFormat}`
+            : undefined,
         ),
         body: JSON.stringify({
           model: this.binding.modelName,
@@ -498,30 +573,50 @@ export class MiniMaxImageProvider implements ImageProvider {
 
     const payload = await requestPayload('base64');
     const baseResp = isRecord(payload.base_resp) ? payload.base_resp : null;
-    const baseStatusCode = typeof baseResp?.status_code === 'number' ? baseResp.status_code : 0;
-    const baseStatusMessage = typeof baseResp?.status_msg === 'string' ? baseResp.status_msg : null;
+    const baseStatusCode =
+      typeof baseResp?.status_code === 'number' ? baseResp.status_code : 0;
+    const baseStatusMessage =
+      typeof baseResp?.status_msg === 'string' ? baseResp.status_msg : null;
 
     if (baseStatusCode !== 0) {
-      throw new Error(baseStatusMessage ?? `MiniMax image generation failed with status ${baseStatusCode}`);
+      throw new Error(
+        baseStatusMessage ??
+          `MiniMax image generation failed with status ${baseStatusCode}`,
+      );
     }
 
     const metadata = isRecord(payload.metadata) ? payload.metadata : null;
-    const failedCount = typeof metadata?.failed_count === 'number' ? metadata.failed_count : 0;
-    const successCount = typeof metadata?.success_count === 'number' ? metadata.success_count : null;
+    const failedCount =
+      typeof metadata?.failed_count === 'number' ? metadata.failed_count : 0;
+    const successCount =
+      typeof metadata?.success_count === 'number'
+        ? metadata.success_count
+        : null;
 
-    const data = isRecord(payload.data) ? payload.data : isRecord(payload) ? payload : {};
+    const data = isRecord(payload.data)
+      ? payload.data
+      : isRecord(payload)
+        ? payload
+        : {};
     let { base64Candidate, urlCandidate } = extractMiniMaxImageCandidate(data);
 
     if (!base64Candidate && !urlCandidate) {
       const fallbackPayload = await requestPayload('url');
-      const fallbackBaseResp = isRecord(fallbackPayload.base_resp) ? fallbackPayload.base_resp : null;
+      const fallbackBaseResp = isRecord(fallbackPayload.base_resp)
+        ? fallbackPayload.base_resp
+        : null;
       const fallbackStatusCode =
-        typeof fallbackBaseResp?.status_code === 'number' ? fallbackBaseResp.status_code : 0;
+        typeof fallbackBaseResp?.status_code === 'number'
+          ? fallbackBaseResp.status_code
+          : 0;
       const fallbackStatusMessage =
-        typeof fallbackBaseResp?.status_msg === 'string' ? fallbackBaseResp.status_msg : null;
+        typeof fallbackBaseResp?.status_msg === 'string'
+          ? fallbackBaseResp.status_msg
+          : null;
       if (fallbackStatusCode !== 0) {
         throw new Error(
-          fallbackStatusMessage ?? `MiniMax image generation failed with status ${fallbackStatusCode}`,
+          fallbackStatusMessage ??
+            `MiniMax image generation failed with status ${fallbackStatusCode}`,
         );
       }
 
@@ -530,11 +625,16 @@ export class MiniMaxImageProvider implements ImageProvider {
         : isRecord(fallbackPayload)
           ? fallbackPayload
           : {};
-      ({ base64Candidate, urlCandidate } = extractMiniMaxImageCandidate(fallbackData));
+      ({ base64Candidate, urlCandidate } =
+        extractMiniMaxImageCandidate(fallbackData));
     }
 
     if (!base64Candidate && urlCandidate) {
-      const downloaded = await fetchRemoteAssetAsBase64(this.binding, urlCandidate, input.signal);
+      const downloaded = await fetchRemoteAssetAsBase64(
+        this.binding,
+        urlCandidate,
+        input.signal,
+      );
       if (downloaded) {
         base64Candidate = downloaded.bytesBase64;
         return {
@@ -553,7 +653,8 @@ export class MiniMaxImageProvider implements ImageProvider {
     if (!base64Candidate && !urlCandidate) {
       if (failedCount > 0 && successCount === 0) {
         throw new Error(
-          baseStatusMessage ?? `MiniMax image generation failed (${failedCount} request(s) did not produce an image)`,
+          baseStatusMessage ??
+            `MiniMax image generation failed (${failedCount} request(s) did not produce an image)`,
         );
       }
       throw new Error('MiniMax image generation did not return image data');
@@ -577,44 +678,65 @@ export class MiniMaxVideoProvider implements VideoProvider {
   constructor(private readonly binding: ProviderBindingConfig) {}
 
   async generate(input: VideoGenerationInput): Promise<MediaGenerationOutput> {
-    const created = await fetchMiniMaxJson<Record<string, unknown>>(this.binding, '/video_generation', {
-      method: 'POST',
-      signal: input.signal,
-      headers: providerIdempotencyHeaders(input.idempotencyKey),
-      body: JSON.stringify({
-        model: this.binding.modelName,
-        prompt: input.prompt,
-        duration: inferMiniMaxDuration(input.durationMs),
-        resolution: inferMiniMaxVideoResolution(input.width, input.height),
-        first_frame_image: input.referenceAsset ? dataUrlFromReference(input.referenceAsset) : undefined,
-      }),
-    });
-
-    const baseResp = isRecord(created.base_resp) ? created.base_resp : null;
-    const baseStatusCode = typeof baseResp?.status_code === 'number' ? baseResp.status_code : 0;
-    const baseStatusMessage = typeof baseResp?.status_msg === 'string' ? baseResp.status_msg : null;
-
-    if (baseStatusCode !== 0) {
-      throw new Error(baseStatusMessage ?? `MiniMax video generation request failed with status ${baseStatusCode}`);
-    }
-
-    const taskId =
-      typeof created.task_id === 'string'
-        ? created.task_id
-        : isRecord(created.data) && typeof created.data.task_id === 'string'
-          ? created.data.task_id
-        : typeof created.id === 'string'
-          ? created.id
-          : null;
+    throwIfProviderAborted(input.signal);
+    let taskId = input.resumeRemoteTaskId?.trim();
     if (!taskId) {
-      throw new Error(
-        baseStatusMessage
-          ? `MiniMax video generation did not return a task id: ${baseStatusMessage}`
-          : 'MiniMax video generation did not return a task id',
+      const created = await fetchMiniMaxJson<Record<string, unknown>>(
+        this.binding,
+        '/video_generation',
+        {
+          method: 'POST',
+          signal: input.signal,
+          headers: providerIdempotencyHeaders(input.idempotencyKey),
+          body: JSON.stringify({
+            model: this.binding.modelName,
+            prompt: input.prompt,
+            duration: inferMiniMaxDuration(input.durationMs),
+            resolution: inferMiniMaxVideoResolution(input.width, input.height),
+            first_frame_image: input.referenceAsset
+              ? dataUrlFromReference(input.referenceAsset)
+              : undefined,
+          }),
+        },
       );
+
+      const baseResp = isRecord(created.base_resp) ? created.base_resp : null;
+      const baseStatusCode =
+        typeof baseResp?.status_code === 'number' ? baseResp.status_code : 0;
+      const baseStatusMessage =
+        typeof baseResp?.status_msg === 'string' ? baseResp.status_msg : null;
+
+      if (baseStatusCode !== 0) {
+        throw new Error(
+          baseStatusMessage ??
+            `MiniMax video generation request failed with status ${baseStatusCode}`,
+        );
+      }
+
+      taskId =
+        typeof created.task_id === 'string'
+          ? created.task_id
+          : isRecord(created.data) && typeof created.data.task_id === 'string'
+            ? created.data.task_id
+            : typeof created.id === 'string'
+              ? created.id
+              : undefined;
+      if (!taskId) {
+        throw new Error(
+          baseStatusMessage
+            ? `MiniMax video generation did not return a task id: ${baseStatusMessage}`
+            : 'MiniMax video generation did not return a task id',
+        );
+      }
+      // Await the durable acknowledgement: a process restart after this point
+      // resumes the supplier job instead of paying for a duplicate generation.
+      await input.onRemoteTaskSubmitted?.(taskId);
     }
 
-    const timeoutMs = Math.max(30_000, (this.binding.timeoutSec ?? 300) * 1_000);
+    const timeoutMs = Math.max(
+      30_000,
+      (this.binding.timeoutSec ?? 300) * 1_000,
+    );
     const startedAt = Date.now();
 
     while (Date.now() - startedAt < timeoutMs) {
@@ -625,27 +747,48 @@ export class MiniMaxVideoProvider implements VideoProvider {
         { method: 'GET', signal: input.signal },
       );
 
-      const status = typeof statusPayload.status === 'string' ? statusPayload.status : 'Unknown';
+      const status =
+        typeof statusPayload.status === 'string'
+          ? statusPayload.status
+          : 'Unknown';
       if (status === 'Success') {
-        const fileId = typeof statusPayload.file_id === 'string' ? statusPayload.file_id : null;
-        const downloadUrl = typeof statusPayload.download_url === 'string' ? statusPayload.download_url : null;
+        const fileId =
+          typeof statusPayload.file_id === 'string'
+            ? statusPayload.file_id
+            : null;
+        const downloadUrl =
+          typeof statusPayload.download_url === 'string'
+            ? statusPayload.download_url
+            : null;
 
         if (fileId) {
-          const filePayload = await fetchMiniMaxJson<MiniMaxFileRetrievePayload>(
-            this.binding,
-            `/files/retrieve?file_id=${encodeURIComponent(fileId)}`,
-            { method: 'GET', signal: input.signal },
-          );
-          const fileBaseResp = isRecord(filePayload.base_resp) ? filePayload.base_resp : null;
-          const fileStatusCode = typeof fileBaseResp?.status_code === 'number' ? fileBaseResp.status_code : 0;
+          const filePayload =
+            await fetchMiniMaxJson<MiniMaxFileRetrievePayload>(
+              this.binding,
+              `/files/retrieve?file_id=${encodeURIComponent(fileId)}`,
+              { method: 'GET', signal: input.signal },
+            );
+          const fileBaseResp = isRecord(filePayload.base_resp)
+            ? filePayload.base_resp
+            : null;
+          const fileStatusCode =
+            typeof fileBaseResp?.status_code === 'number'
+              ? fileBaseResp.status_code
+              : 0;
           const fileStatusMessage =
-            typeof fileBaseResp?.status_msg === 'string' ? fileBaseResp.status_msg : null;
+            typeof fileBaseResp?.status_msg === 'string'
+              ? fileBaseResp.status_msg
+              : null;
           if (fileStatusCode !== 0) {
-            throw new Error(fileStatusMessage ?? `MiniMax file retrieve failed with status ${fileStatusCode}`);
+            throw new Error(
+              fileStatusMessage ??
+                `MiniMax file retrieve failed with status ${fileStatusCode}`,
+            );
           }
 
           const file = isRecord(filePayload.file) ? filePayload.file : null;
-          const retrievedDownloadUrl = typeof file?.download_url === 'string' ? file.download_url : null;
+          const retrievedDownloadUrl =
+            typeof file?.download_url === 'string' ? file.download_url : null;
 
           if (retrievedDownloadUrl) {
             return {
@@ -657,7 +800,8 @@ export class MiniMaxVideoProvider implements VideoProvider {
                 api: 'video_generation',
                 fileId,
                 status,
-                filename: typeof file?.filename === 'string' ? file.filename : null,
+                filename:
+                  typeof file?.filename === 'string' ? file.filename : null,
               },
             };
           }
@@ -676,7 +820,8 @@ export class MiniMaxVideoProvider implements VideoProvider {
               api: 'video_generation',
               fileId,
               status,
-              filename: typeof file?.filename === 'string' ? file.filename : null,
+              filename:
+                typeof file?.filename === 'string' ? file.filename : null,
             },
           };
         }
@@ -694,10 +839,13 @@ export class MiniMaxVideoProvider implements VideoProvider {
           };
         }
 
-        throw new Error('MiniMax video task succeeded but did not return a downloadable file');
+        throw new Error(
+          'MiniMax video task succeeded but did not return a downloadable file',
+        );
       }
 
       if (status === 'Fail' || status === 'Failed') {
+        await input.onRemoteTaskFailed?.(taskId);
         const errorMessage =
           typeof statusPayload.message === 'string'
             ? statusPayload.message

@@ -1,22 +1,39 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { ShotWithAssets } from '@video-agent-studio/shared';
 import { ArtifactVersionPanel } from '@/components/artifact-version-panel';
 import { ControlPlaneActionButton } from '@/components/control-plane-action-button';
+import {
+  matchesShotFilter,
+  shotNeedsAttention,
+  type ShotFilter,
+} from '@/lib/shot-filter';
 
 type TimelineShot = ShotWithAssets;
 
 export function TimelineBoard({
   projectId,
   shots,
+  initialShotId,
 }: {
   projectId: string;
   shots: TimelineShot[];
+  initialShotId?: string;
 }) {
   const router = useRouter();
   const boardRef = useRef<HTMLDivElement>(null);
+  const [filter, setFilter] = useState<ShotFilter>('all');
+  const [position, setPosition] = useState({
+    start: 1,
+    end: 1,
+    atStart: true,
+    atEnd: false,
+  });
+  const visibleShots = shots.filter((shot) => matchesShotFilter(shot, filter));
+  const visibleKey = visibleShots.map((shot) => shot.id).join(',');
   const hasPendingProcessing = shots.some(
     (shot) =>
       shot.assets?.storyboardMain?.processingVersion?.status === 'pending' ||
@@ -30,11 +47,50 @@ export function TimelineBoard({
       Boolean(shot.assets?.videoMain?.url) &&
       !shot.assets?.videoMain?.isPlaceholder,
   ).length;
-  const attentionCount = shots.filter(
-    (shot) =>
-      shot.assets?.storyboardMain?.processingVersion?.status === 'failed' ||
-      shot.assets?.videoMain?.processingVersion?.status === 'failed',
-  ).length;
+  const attentionCount = shots.filter(shotNeedsAttention).length;
+
+  useEffect(() => {
+    const board = boardRef.current;
+    if (!board) return;
+    const update = () => {
+      const bounds = board.getBoundingClientRect();
+      const cards = Array.from(
+        board.querySelectorAll<HTMLElement>(':scope > article'),
+      );
+      const visible = cards.flatMap((card, index) => {
+        const rect = card.getBoundingClientRect();
+        return Math.min(rect.right, bounds.right) -
+          Math.max(rect.left, bounds.left) >
+          rect.width / 2
+          ? [index + 1]
+          : [];
+      });
+      setPosition({
+        start: visible[0] ?? 1,
+        end: visible.at(-1) ?? 1,
+        atStart: board.scrollLeft <= 2,
+        atEnd: board.scrollLeft + board.clientWidth >= board.scrollWidth - 2,
+      });
+    };
+    const initialCard = Array.from(
+      board.querySelectorAll<HTMLElement>(':scope > article'),
+    ).find((card) => card.dataset.shotId === initialShotId);
+    board.scrollTo({
+      left: initialCard
+        ? initialCard.offsetLeft -
+          (board.firstElementChild as HTMLElement).offsetLeft
+        : 0,
+      behavior: 'instant',
+    });
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(board);
+    board.addEventListener('scroll', update, { passive: true });
+    return () => {
+      observer.disconnect();
+      board.removeEventListener('scroll', update);
+    };
+  }, [visibleKey, initialShotId]);
 
   useEffect(() => {
     if (!hasPendingProcessing) {
@@ -61,19 +117,22 @@ export function TimelineBoard({
       return;
     }
     board.scrollBy({
-      left: direction * Math.max(280, board.clientWidth * 0.82),
-      behavior: 'smooth',
+      left:
+        direction *
+        ((board.querySelector('article')?.getBoundingClientRect().width ??
+          320) +
+          18),
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? 'instant'
+        : 'smooth',
     });
   }
 
   return (
-    <div className="horizontal-board">
+    <div className="horizontal-board timeline-workspace">
       <div className="workspace-toolbar">
         <div>
           <strong>{shots.length} 个 Shot</strong>
-          <span>
-            横向滚动或使用左右方向键逐镜头检查，卡片内从上到下完成分镜与视频。
-          </span>
         </div>
         <div className="workspace-toolbar-actions">
           <div className="workspace-progress" aria-label="制作进度">
@@ -100,6 +159,7 @@ export function TimelineBoard({
               <button
                 className="button ghost small"
                 type="button"
+                disabled={position.atStart || visibleShots.length === 0}
                 onClick={() => moveBoard(-1)}
               >
                 上一个
@@ -107,6 +167,7 @@ export function TimelineBoard({
               <button
                 className="button ghost small"
                 type="button"
+                disabled={position.atEnd || visibleShots.length === 0}
                 onClick={() => moveBoard(1)}
               >
                 下一个
@@ -115,6 +176,88 @@ export function TimelineBoard({
           ) : null}
         </div>
       </div>
+      <div className="shot-browser-controls">
+        <div className="shot-filters" role="group" aria-label="筛选镜头">
+          {(
+            [
+              ['all', `全部 ${shots.length}`],
+              ['attention', `待处理 ${attentionCount}`],
+              ['missing_video', `待生成视频 ${shots.length - videoCount}`],
+              ['locked', '已锁定'],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              className="button ghost small"
+              aria-pressed={filter === value}
+              onClick={() => setFilter(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {visibleShots.length > 0 ? (
+          <div className="shot-position">
+            <span aria-live="polite">
+              显示 {position.start}–{position.end} / {visibleShots.length}
+            </span>
+            <select
+              aria-label="跳转到镜头"
+              value=""
+              onChange={(event) => {
+                const card = Array.from(
+                  boardRef.current?.querySelectorAll<HTMLElement>(
+                    ':scope > article',
+                  ) ?? [],
+                ).find((item) => item.dataset.shotId === event.target.value);
+                card?.scrollIntoView({
+                  block: 'nearest',
+                  inline: 'center',
+                  behavior: window.matchMedia(
+                    '(prefers-reduced-motion: reduce)',
+                  ).matches
+                    ? 'instant'
+                    : 'smooth',
+                });
+              }}
+            >
+              <option value="" disabled>
+                定位 Shot…
+              </option>
+              {visibleShots.map((shot) => (
+                <option key={shot.id} value={shot.id}>
+                  #{shot.shotIndexGlobal} {shot.title || '未命名'}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+      </div>
+      {visibleShots.length === 0 ? (
+        <div className="card empty-reading-state" role="status">
+          <strong>
+            {shots.length === 0 ? '还没有可制作的镜头' : '此筛选下没有镜头'}
+          </strong>
+          <p>
+            {shots.length === 0
+              ? '先完成创作设定与脚本确认，再启动 Shot 制作。'
+              : '筛选不会修改内容，可以随时回到全部镜头。'}
+          </p>
+          {shots.length === 0 ? (
+            <Link className="button small" href={`/projects/${projectId}`}>
+              查看下一步
+            </Link>
+          ) : (
+            <button
+              className="button secondary small"
+              onClick={() => setFilter('all')}
+            >
+              显示全部镜头
+            </button>
+          )}
+        </div>
+      ) : null}
       {hasPendingProcessing ? (
         <div className="workspace-notice" role="status" aria-live="polite">
           <div className="toolbar">
@@ -128,20 +271,23 @@ export function TimelineBoard({
       ) : null}
       <div
         ref={boardRef}
+        id="shot-board"
         className="horizontal-board-inner"
         role="region"
         aria-label="Shot 横向制作列表"
         tabIndex={0}
         onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return;
           if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
             event.preventDefault();
             moveBoard(event.key === 'ArrowLeft' ? -1 : 1);
           }
         }}
       >
-        {shots.map((shot) => (
+        {visibleShots.map((shot) => (
           <article
             key={shot.id}
+            data-shot-id={shot.id}
             className={`shot-card ${shot.locked ? 'is-locked' : ''}`}
             aria-label={`Shot ${shot.shotIndexGlobal} ${shot.title ?? ''}`}
           >
@@ -177,6 +323,7 @@ export function TimelineBoard({
               currentVersionId={shot.assets?.storyboardMain?.activeVersionId}
               currentVersionNote={shot.assets?.storyboardMain?.versionNote}
               processingVersion={shot.assets?.storyboardMain?.processingVersion}
+              recoveryHref={`/projects/${projectId}/storyboard?shot=${encodeURIComponent(shot.id)}#shot-editor`}
               activationObjectType="storyboard"
               versionLockApiSegment="storyboards"
               activateEndpoint={
@@ -196,6 +343,7 @@ export function TimelineBoard({
               currentVersionId={shot.assets?.videoMain?.activeVersionId}
               currentVersionNote={shot.assets?.videoMain?.versionNote}
               processingVersion={shot.assets?.videoMain?.processingVersion}
+              recoveryHref={`/projects/${projectId}/storyboard?shot=${encodeURIComponent(shot.id)}#shot-editor`}
               activationObjectType="video"
               versionLockApiSegment="videos"
               activateEndpoint={
@@ -211,6 +359,12 @@ export function TimelineBoard({
               compact
             />
             <footer className="shot-card-footer">
+              <Link
+                className="shot-edit-link"
+                href={`/projects/${projectId}/storyboard?shot=${encodeURIComponent(shot.id)}#shot-editor`}
+              >
+                {shot.locked ? '查看镜头详情' : '编辑镜头描述'}
+              </Link>
               {shot.locked ? (
                 <p>此 Shot 已锁定。解锁前不会生成或切换内容。</p>
               ) : null}

@@ -6,9 +6,11 @@ import {
   artifactRepository,
   ensureDb,
   jobRepository,
+  lockRepository,
   readDb,
   runRepository,
 } from '@video-agent-studio/db';
+import { MockVideoProvider } from '@video-agent-studio/providers';
 import { DurableJobRunner } from './job-runner';
 import {
   createWorkflowJobHandlers,
@@ -35,6 +37,44 @@ describe('workflow durable job recovery', () => {
     vi.restoreAllMocks();
     delete process.env.VIDEO_AGENT_STUDIO_DB_FILE;
     await rm(tempDirectory, { recursive: true, force: true });
+  });
+
+  it('resumes a local video supplier task from the durable checkpoint without another submission', async () => {
+    const db = await readDb();
+    const candidates = await Promise.all(db.shots.filter((s) => s.projectId === projectId).map(async (shot) => ({
+      shot, video: await artifactRepository.getShotVideo(shot.id),
+      locked: await lockRepository.isLocked('shot', shot.id),
+    })));
+    const target = candidates.find((item) => item.video?.group && !item.locked);
+    if (!target?.video?.group) throw new Error('Expected an unlocked video fixture');
+    const beforeCount = target.video.versions.length;
+    const { job } = await jobRepository.enqueue({
+      projectId, jobType: 'video', idempotencyKey: 'local-remote-video-recovery',
+      payload: { action: 'regenerate_shot_video', shotId: target.shot.id, promptHint: 'recovery test' },
+      maxAttempts: 2, timeoutMs: 5000,
+    });
+    let submissions = 0;
+    vi.spyOn(MockVideoProvider.prototype, 'generate').mockImplementation(async (input) => {
+      if (!input.resumeRemoteTaskId) {
+        submissions += 1;
+        await input.onRemoteTaskSubmitted?.('durable-remote-1');
+        throw new Error('connection interrupted after submission');
+      }
+      expect(input.resumeRemoteTaskId).toBe('durable-remote-1');
+      return { url: 'https://example.test/recovered.mp4', remoteId: input.resumeRemoteTaskId, mimeType: 'video/mp4' };
+    });
+    const runner = new DurableJobRunner({
+      workerId: 'remote-recovery-worker', leaseDurationMs: 1000,
+      heartbeatIntervalMs: 100, retryDelayMs: () => 0,
+      handlers: createWorkflowJobHandlers(),
+    });
+    expect((await runner.runOnce()).state).toBe('retry_scheduled');
+    expect((await jobRepository.get(job.id))?.checkpoint.remoteVideoTasks).toBeTruthy();
+    expect((await runner.runOnce()).state).toBe('succeeded');
+    const after = await artifactRepository.getShotVideo(target.shot.id);
+    expect(submissions).toBe(1);
+    expect(after?.versions).toHaveLength(beforeCount + 1);
+    expect(after?.versions.find((v) => v.id === after.group?.activeVersionId)?.metadata.remoteTaskId).toBe('durable-remote-1');
   });
 
   it('reuses the bound run when the workflow settled before its completed checkpoint', async () => {

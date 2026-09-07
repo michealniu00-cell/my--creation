@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import type { ShotWithAssets } from '@video-agent-studio/shared';
 
@@ -9,9 +10,11 @@ type Shot = ShotWithAssets;
 export function ShotWorkbench({
   projectId,
   shots,
+  initialShotId,
 }: {
   projectId: string;
   shots: Shot[];
+  initialShotId?: string;
 }) {
   const router = useRouter();
   const ordered = useMemo(
@@ -19,7 +22,7 @@ export function ShotWorkbench({
     [shots],
   );
   const [selectedId, setSelectedId] = useState<string | undefined>(
-    ordered[0]?.id,
+    ordered.find((shot) => shot.id === initialShotId)?.id ?? ordered[0]?.id,
   );
   const selected = ordered.find((shot) => shot.id === selectedId) ?? ordered[0];
   const [form, setForm] = useState(selected);
@@ -257,43 +260,7 @@ export function ShotWorkbench({
             </button>
           ))}
         </div>
-        <div className="horizontal-board">
-          <div className="horizontal-board-inner">
-            {ordered.map((shot) => (
-              <div key={shot.id} className="shot-card">
-                <div className="toolbar">
-                  <strong>
-                    #{shot.shotIndexGlobal} {shot.title}
-                  </strong>
-                  <span
-                    className={`pill ${shot.locked ? 'reviewing' : 'active'}`}
-                  >
-                    {shot.locked ? '已锁定' : '可编辑'}
-                  </span>
-                </div>
-                <div className="subtle">{shot.subjectDesc}</div>
-                <div className="inline-actions">
-                  <button
-                    className="button ghost small"
-                    type="button"
-                    onClick={() => chooseShot(shot.id)}
-                  >
-                    编辑详情
-                  </button>
-                  <button
-                    className="button ghost small"
-                    type="button"
-                    onClick={() => void removeShot(shot.id)}
-                    disabled={shot.locked || mutation !== null}
-                  >
-                    删除
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="panel">
+        <div className="panel" id="shot-editor">
           {selected ? (
             <div className="grid" aria-busy={mutation !== null}>
               <div className="toolbar">
@@ -309,6 +276,19 @@ export function ShotWorkbench({
                   {selected.locked ? '只读' : isDirty ? '未保存' : '已保存'}
                 </span>
               </div>
+              <Link
+                className="shot-edit-link"
+                href={`/projects/${projectId}/timeline?shot=${encodeURIComponent(selected.id)}#shot-board`}
+                onClick={(event) => {
+                  if (
+                    isDirty &&
+                    !window.confirm('当前 Shot 有未保存修改，确定离开吗？')
+                  )
+                    event.preventDefault();
+                }}
+              >
+                返回分镜与视频制作台
+              </Link>
               {selected.locked ? (
                 <div className="guidance-note">
                   <strong>此 Shot 已锁定</strong>
@@ -487,6 +467,14 @@ export function ShotWorkbench({
                 </div>
               </fieldset>
               <div className="actions">
+                <button
+                  className="button ghost"
+                  type="button"
+                  onClick={() => void removeShot(selected.id)}
+                  disabled={selected.locked || mutation !== null}
+                >
+                  删除当前 Shot
+                </button>
                 <button
                   className="button secondary"
                   type="button"

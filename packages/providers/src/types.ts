@@ -50,7 +50,17 @@ export interface ImageGenerationInput extends ProviderRequestControl {
   referenceImage?: ReferenceAssetInput | null;
 }
 
-export interface VideoGenerationInput extends ProviderRequestControl {
+export interface RemoteVideoTaskControl {
+  /** Resume polling an already-submitted remote task, without another POST. */
+  resumeRemoteTaskId?: string;
+  /** Must be durably acknowledged before polling or retrieving the result. */
+  onRemoteTaskSubmitted?: (remoteTaskId: string) => Promise<void>;
+  /** Terminal supplier failure permits a subsequent explicit retry to submit anew. */
+  onRemoteTaskFailed?: (remoteTaskId: string) => Promise<void>;
+}
+
+export interface VideoGenerationInput
+  extends ProviderRequestControl, RemoteVideoTaskControl {
   prompt: string;
   durationMs?: number;
   width?: number;

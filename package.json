@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "dev": "npm run dev:all",
-    "dev:all": "turbo run dev --parallel",
+    "dev:all": "node scripts/run-with-root-env.mjs turbo run dev --parallel --env-mode=loose",
     "dev:web": "node scripts/run-with-root-env.mjs npm --workspace @video-agent-studio/web run dev",
     "dev:worker": "node scripts/run-with-root-env.mjs npm --workspace @video-agent-studio/worker run dev",
     "build": "turbo run build",
@@ -30,5 +30,8 @@
   "dependencies": {
     "ai": "^6.0.154",
     "vercel-minimax-ai-provider": "^0.0.2"
+  },
+  "overrides": {
+    "postcss": "8.5.28"
   }
 }

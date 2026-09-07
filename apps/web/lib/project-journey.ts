@@ -111,7 +111,7 @@ export function deriveProjectJourney(input: ProjectJourneyInput): ProjectJourney
   ) {
     script = stageState('awaiting_confirmation', '最终脚本等待你的确认');
   } else if (runs.script?.status === 'completed') {
-    script = stageState('completed', '脚本工作流已完成');
+    script = stageState('needs_attention', '运行已结束，但缺少最终脚本的人工确认凭据');
   } else if (isRunInProgress(runs.script)) {
     script = stageState('in_progress', '脚本 Agent 正在执行与审核');
   } else {
@@ -123,6 +123,10 @@ export function deriveProjectJourney(input: ProjectJourneyInput): ProjectJourney
   let production: JourneyStageState;
   if (!scriptConfirmed) {
     production = stageState('not_started', '确认最终脚本后开始');
+    if (stats.shotCount > 0) {
+      production.label = '待脚本确认';
+      production.detail = `已有 ${stats.shotCount} 个镜头，确认脚本后继续；历史产出保留`;
+    }
   } else if (project.currentStage === 'completed') {
     production = stageState('completed', outputDetail);
   } else if (
@@ -142,21 +146,17 @@ export function deriveProjectJourney(input: ProjectJourneyInput): ProjectJourney
   if (!configConfirmed) {
     recommendedAction = 'confirm_config';
   } else if (!scriptConfirmed) {
-    recommendedAction = script.status === 'awaiting_confirmation'
-      ? 'confirm_script'
-      : 'resolve_script';
-  } else if (project.currentStage === 'script') {
-    if (script.status === 'needs_attention') {
-      recommendedAction = 'resolve_script';
-    } else if (script.status === 'awaiting_confirmation') {
+    if (script.status === 'awaiting_confirmation') {
       recommendedAction = 'confirm_script';
     } else if (script.status === 'in_progress' || script.status === 'paused') {
       recommendedAction = 'monitor_script';
-    } else if (script.status === 'completed') {
-      recommendedAction = 'produce_shots';
-    } else {
+    } else if (script.status === 'not_started') {
       recommendedAction = 'start_script';
+    } else {
+      recommendedAction = 'resolve_script';
     }
+  } else if (project.currentStage === 'script') {
+    recommendedAction = 'produce_shots';
   } else if (project.currentStage === 'storyboard') {
     recommendedAction = production.status === 'needs_attention' ? 'resolve_shots' : 'produce_shots';
   } else if (project.currentStage === 'video') {

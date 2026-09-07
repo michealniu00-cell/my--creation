@@ -95,6 +95,19 @@ describe('artifactRepository atomic activation', () => {
     ).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
   });
 
+  it.each(['pending', 'failed', 'rejected'] as const)('never activates a %s candidate or changes current content', async (status) => {
+    const group = await createShotGroup();
+    const active = await artifactRepository.createNextVersion(versionInput(group.id, 'active'));
+    await artifactRepository.activateVersionIfExpected(group.id, active!.id, { expectedActiveVersionId: null });
+    const candidate = await artifactRepository.createNextVersion({ ...versionInput(group.id, status), status });
+    const before = await artifactRepository.getGroup(group.id);
+    const result = await artifactRepository.activateVersionIfExpected(group.id, candidate!.id, { expectedActiveVersionId: active!.id });
+    expect(result).toMatchObject({ ok: false, reason: 'version_not_ready' });
+    expect(await artifactRepository.getGroup(group.id)).toEqual(before);
+    expect(await artifactRepository.activateVersion(group.id, candidate!.id)).toBeNull();
+    expect((await artifactRepository.getVersions(group.id)).versions).toHaveLength(2);
+  });
+
   it('reuses one immutable version for concurrent retries of the same provider execution', async () => {
     const group = await createShotGroup();
     const executionKey = 'job-1:storyboard:agent8:shot-1';

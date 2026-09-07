@@ -60,6 +60,10 @@ export type TaskStatus = (typeof taskStatuses)[number];
 export type ReviewDecision = (typeof reviewDecisions)[number];
 export type ArtifactGroupStatus = (typeof artifactGroupStatuses)[number];
 export type ArtifactVersionStatus = (typeof artifactVersionStatuses)[number];
+/** Placeholders remain explicitly selectable for the local/mock workflow. */
+export function isActivatableArtifactStatus(status: string): boolean {
+  return status === 'generated' || status === 'approved' || status === 'placeholder';
+}
 export type LockScope = (typeof lockScopes)[number];
 export type EventLevel = (typeof eventLevels)[number];
 export type ImpactLevel = (typeof impactLevels)[number];

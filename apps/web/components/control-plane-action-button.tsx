@@ -123,6 +123,7 @@ export function ControlPlaneActionButton({
   const descriptionId = useId();
   const resolutionId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
+  const triggerButtonRef = useRef<HTMLButtonElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -146,9 +147,12 @@ export function ControlPlaneActionButton({
     if (!confirmationOpen) {
       return;
     }
-    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const triggerButton = triggerButtonRef.current;
     cancelButtonRef.current?.focus();
-    return () => previouslyFocused?.focus();
+    // The async impact check temporarily disables the trigger, which can move
+    // browser focus to <body> before this effect runs. Restore the known trigger
+    // rather than capturing an already-lost activeElement.
+    return () => triggerButton?.focus();
   }, [confirmationOpen]);
 
   function handleDialogKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -276,6 +280,7 @@ export function ControlPlaneActionButton({
   return (
     <>
       <button
+        ref={triggerButtonRef}
         className={className}
         type="button"
         disabled={disabled || pending}

@@ -26,6 +26,7 @@ import {
 } from '@video-agent-studio/workflow-engine';
 import {
   scopedIdempotencyKey,
+  remoteVideoTaskScope,
   throwIfWorkflowAborted,
   type WorkflowExecutionControl,
 } from './execution-control';
@@ -437,6 +438,15 @@ export async function runVideoWorkflow(
     let generatedCandidateId: string | null = null;
     try {
       const response = await videoProvider.generate({
+        ...options?.remoteVideoTaskControl?.(
+          remoteVideoTaskScope(shot.id, {
+            provider: videoBinding?.provider,
+            model: videoBinding?.modelName,
+            baseUrl: videoBinding?.baseUrl,
+            prompt,
+            durationMs: 5000,
+          }),
+        ),
         prompt,
         durationMs: 5000,
         signal: options?.signal,
@@ -470,6 +480,7 @@ export async function runVideoWorkflow(
         metadata: {
           provider: videoBinding?.provider ?? 'mock',
           model: videoBinding?.modelName ?? 'mock',
+          remoteTaskId: response.remoteId ?? null,
           ...(response.metadata ?? {}),
         },
         status: 'generated',

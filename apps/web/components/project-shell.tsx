@@ -12,7 +12,10 @@ import type {
 } from '@video-agent-studio/shared';
 import { StatusPill } from './status-pill';
 import { ProjectQuickActions } from './project-quick-actions';
-import { deriveProjectJourney, type JourneyStageKey } from '@/lib/project-journey';
+import {
+  deriveProjectJourney,
+  type JourneyStageKey,
+} from '@/lib/project-journey';
 
 const utilityNavItems = [
   { href: '/storyboard', label: 'Shot 结构', description: '编辑镜头字段' },
@@ -22,7 +25,10 @@ const utilityNavItems = [
 ];
 
 function isActivePath(currentPath: string, href: string, overviewHref: string) {
-  return currentPath === href || (href !== overviewHref && currentPath.startsWith(href));
+  return (
+    currentPath === href ||
+    (href !== overviewHref && currentPath.startsWith(href))
+  );
 }
 
 export function ProjectShell({
@@ -59,10 +65,33 @@ export function ProjectShell({
     description: string;
     stageKey?: JourneyStageKey;
   }> = [
-    { href: overviewHref, step: '00', label: '项目总览', description: '进度与下一步' },
-    { href: `${overviewHref}/agent1`, step: '01', label: '创作设定', description: '确认目标与约束', stageKey: 'setup' },
-    { href: `${overviewHref}/script`, step: '02', label: '脚本与审核', description: '阅读并确认脚本', stageKey: 'script' },
-    { href: `${overviewHref}/timeline`, step: '03', label: 'Shot 制作', description: '分镜与视频同屏', stageKey: 'production' },
+    {
+      href: overviewHref,
+      step: '00',
+      label: '项目总览',
+      description: '进度与下一步',
+    },
+    {
+      href: `${overviewHref}/agent1`,
+      step: '01',
+      label: '创作设定',
+      description: '确认目标与约束',
+      stageKey: 'setup',
+    },
+    {
+      href: `${overviewHref}/script`,
+      step: '02',
+      label: '脚本与审核',
+      description: '阅读并确认脚本',
+      stageKey: 'script',
+    },
+    {
+      href: `${overviewHref}/timeline`,
+      step: '03',
+      label: 'Shot 制作',
+      description: '分镜与视频同屏',
+      stageKey: 'production',
+    },
   ];
 
   const journey = deriveProjectJourney({
@@ -84,7 +113,14 @@ export function ProjectShell({
       case 'confirm_script':
         return { href: `${overviewHref}/script`, label: '检查并确认脚本' };
       case 'resolve_script':
-        return { href: `${overviewHref}/script`, label: '处理脚本问题' };
+        return {
+          href: `${overviewHref}/script`,
+          label:
+            context.manualGates.scriptEvidenceInconsistent ||
+            project.currentStage !== 'script'
+              ? '检查脚本确认'
+              : '处理脚本问题',
+        };
       case 'produce_video':
         return { href: `${overviewHref}/timeline`, label: '继续生成视频' };
       case 'resolve_shots':
@@ -98,8 +134,14 @@ export function ProjectShell({
   })();
 
   useEffect(() => {
-    const currentItem = workflowNavRef.current?.querySelector<HTMLElement>('[aria-current="page"]');
-    currentItem?.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'center' });
+    const currentItem = workflowNavRef.current?.querySelector<HTMLElement>(
+      '[aria-current="page"]',
+    );
+    currentItem?.scrollIntoView({
+      behavior: 'auto',
+      block: 'nearest',
+      inline: 'center',
+    });
   }, [currentPath]);
 
   return (
@@ -125,19 +167,32 @@ export function ProjectShell({
             </div>
           </div>
 
-          <nav ref={workflowNavRef} className="sidebar-nav" aria-label="制作流程">
+          <nav
+            ref={workflowNavRef}
+            className="sidebar-nav"
+            aria-label="制作流程"
+          >
             <p className="nav-section-label">制作流程</p>
             {workflowNavItems.map((item) => {
               const active = isActivePath(currentPath, item.href, overviewHref);
-              const stage = item.stageKey ? journey.stages[item.stageKey] : null;
+              const stage = item.stageKey
+                ? journey.stages[item.stageKey]
+                : null;
               return (
-                <Link key={item.href} href={item.href} className={`nav-link ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined}>
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`nav-link ${active ? 'active' : ''}`}
+                  aria-current={active ? 'page' : undefined}
+                >
                   <span className="nav-step">{item.step}</span>
                   <span className="nav-copy">
                     <strong>{item.label}</strong>
                     <small>{item.description}</small>
                   </span>
-                  {stage ? <span className="nav-state">{stage.label}</span> : null}
+                  {stage ? (
+                    <span className="nav-state">{stage.label}</span>
+                  ) : null}
                 </Link>
               );
             })}
@@ -149,7 +204,12 @@ export function ProjectShell({
               const href = `${overviewHref}${item.href}`;
               const active = isActivePath(currentPath, href, overviewHref);
               return (
-                <Link key={href} href={href} className={`nav-link nav-link-utility ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined}>
+                <Link
+                  key={href}
+                  href={href}
+                  className={`nav-link nav-link-utility ${active ? 'active' : ''}`}
+                  aria-current={active ? 'page' : undefined}
+                >
                   <span className="nav-copy">
                     <strong>{item.label}</strong>
                     <small>{item.description}</small>
@@ -165,8 +225,14 @@ export function ProjectShell({
             <div className="project-context-copy">
               <div className="inline-actions">
                 <p className="hero-eyebrow">当前项目</p>
-                {config ? <span className="version-label">配置 v{config.versionNo}</span> : null}
-                {failureSummary ? <span className="version-label warning">有待处理异常</span> : null}
+                {config ? (
+                  <span className="version-label">
+                    配置 v{config.versionNo}
+                  </span>
+                ) : null}
+                {failureSummary ? (
+                  <span className="version-label warning">有待处理异常</span>
+                ) : null}
               </div>
               <h2 title={project.title}>{project.title}</h2>
               <p className="project-idea">{project.sourceIdea}</p>
@@ -174,9 +240,16 @@ export function ProjectShell({
 
             <div className="project-context-actions">
               <div className="context-stats" aria-label="项目产出统计">
-                <span><strong>{overview?.stats.shotCount ?? 0}</strong> Shot</span>
-                <span><strong>{overview?.stats.storyboardImageCount ?? 0}</strong> 分镜</span>
-                <span><strong>{overview?.stats.videoClipCount ?? 0}</strong> 视频</span>
+                <span>
+                  <strong>{overview?.stats.shotCount ?? 0}</strong> Shot
+                </span>
+                <span>
+                  <strong>{overview?.stats.storyboardImageCount ?? 0}</strong>{' '}
+                  分镜
+                </span>
+                <span>
+                  <strong>{overview?.stats.videoClipCount ?? 0}</strong> 视频
+                </span>
               </div>
               <div className="inline-actions context-buttons">
                 <Link className="button small" href={currentStageAction.href}>

@@ -179,12 +179,17 @@ describe('runVideoWorkflow', () => {
     const signal = new AbortController().signal;
     const updateSpy = vi.spyOn(runRepository, 'update');
     const providerSpy = vi.spyOn(MockVideoProvider.prototype, 'generate');
+    const submitted = vi.fn().mockResolvedValue(undefined);
+    const remoteControl = vi.fn().mockReturnValue({
+      resumeRemoteTaskId: 'already-submitted-video',
+      onRemoteTaskSubmitted: submitted,
+    });
 
     const run = await runVideoWorkflow(
       project.id,
       'selected_shots',
       [target.id],
-      { signal, idempotencyKey: 'job-video-control' },
+      { signal, idempotencyKey: 'job-video-control', remoteVideoTaskControl: remoteControl },
     );
 
     const runPatches = updateSpy.mock.calls
@@ -202,7 +207,10 @@ describe('runVideoWorkflow', () => {
       expect.objectContaining({
         signal,
         idempotencyKey: `job-video-control:video:agent9:${target.id}`,
+        resumeRemoteTaskId: 'already-submitted-video',
+        onRemoteTaskSubmitted: submitted,
       }),
     );
+    expect(remoteControl).toHaveBeenCalledWith(expect.stringMatching(new RegExp(`^${target.id}:`)));
   });
 });
